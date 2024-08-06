@@ -5,7 +5,7 @@
 
 import re
 from datetime import datetime
-from dateutil.parser import parse
+from dateutil.parser import parse, ParserError
 import pandas as pd
 from pathlib import Path
 import csv
