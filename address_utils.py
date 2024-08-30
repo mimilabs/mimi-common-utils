@@ -1,5 +1,5 @@
 # Databricks notebook source
-!pip install usaddress us
+!pip install usaddress us h3
 
 # COMMAND ----------
 
@@ -9,6 +9,7 @@ import us
 import sqlite3
 import csv 
 import requests
+import h3
 
 # COMMAND ----------
 
@@ -196,6 +197,14 @@ def query_census_bulk_api(address_keys):
 
 # COMMAND ----------
 
+def get_h3(lat, lng, res):
+    if lat is None or lng is None:
+        return ""
+    else:
+        return h3.geo_to_h3(lat, lng, res)
+
+# COMMAND ----------
+
 from pyspark.sql.functions import udf
 
 @udf("boolean")
@@ -206,8 +215,6 @@ def is_po_box_udf(street, city, state, zipcode, threshold = 2):
 def create_address_key_udf(street, city, state, zipcode):
     return create_address_key(street, city, state, zipcode)
 
-# COMMAND ----------
-
-# MAGIC %environment
-# MAGIC "client": "1"
-# MAGIC "base_environment": ""
+@udf("string")
+def get_h3_udf(lat, lng, res):
+    return get_h3(lat, lng, res)
