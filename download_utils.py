@@ -69,25 +69,65 @@ def download_files(urls, path, filenames = None, chunk_size=8192):
 
 # COMMAND ----------
 
+def _unzip_base(path_zip, path_unzip, file_filter=None, name_mapper=None):
+    """Base unzip function with filtering and naming capabilities"""
+    try:
+        if not zipfile.is_zipfile(path_zip):
+            print(f"Not a valid ZIP file: {path_zip}")
+            return False
+            
+        with zipfile.ZipFile(path_zip, "r") as zip_ref:
+            extracted_count = 0
+            
+            for file_info in zip_ref.infolist():
+                original_name = file_info.filename
+                
+                # Apply filter if provided
+                if file_filter and not file_filter(original_name):
+                    continue
+                
+                # Apply name mapping if provided
+                if name_mapper:
+                    new_name = name_mapper(original_name)
+                    file_info.filename = new_name
+                    target_path = Path(f"{path_unzip}/{new_name}")
+                else:
+                    target_path = Path(f"{path_unzip}/{original_name}")
+                
+                if target_path.exists():
+                    continue
+                
+                try:
+                    print(f"[INFO] Extracting {file_info.filename}...")
+                    zip_ref.extract(file_info, path=path_unzip)
+                    extracted_count += 1
+                except Exception as e:
+                    print(f"[ERROR] {target_path}; {e}")
+            
+            print(f"[INFO] Extracted {extracted_count} files from {path_zip}")
+            return True
+            
+    except zipfile.BadZipFile:
+        print(f"Corrupted ZIP file: {path_zip}")
+        return False
+    except Exception as e:
+        print(f"Error processing {path_zip}: {e}")
+        return False
+
 def unzip(path_zip, path_unzip):
-    with zipfile.ZipFile(path_zip, "r") as zip_ref:
-        for member in zip_ref.namelist():
-            if Path(f"{path_unzip}/{member}").exists():
-                continue
-            try:
-                print(f"[INFO] Extracting {member}...")
-                zip_ref.extract(member, path=path_unzip)
-            except Exception as e:
-                print(f"[ERROR] {path_unzip}/{member}; {e}")
+    """Extract all files from ZIP"""
+    return _unzip_base(path_zip, path_unzip)
 
 def unzip_with_name(path_zip, path_unzip, newname):
-    with zipfile.ZipFile(path_zip, "r") as zip_ref:
-        for file_info in zip_ref.infolist():
-            file_info.filename = newname
-            if Path(f"{path_unzip}/{newname}").exists():
-                continue
-            try:
-                print(f"[INFO] Extracting {newname}...")
-                zip_ref.extract(file_info, path=path_unzip)
-            except Exception as e:
-                print(f"[ERROR] {path_unzip}/{newname}; {e}")
+    """Extract files and rename them to a single name"""
+    def name_mapper(original_name):
+        return newname
+    
+    return _unzip_base(path_zip, path_unzip, name_mapper=name_mapper)
+
+def unzip_matching_ext(path_zip, path_unzip, ext):
+    """Extract only files with specific extension"""
+    def file_filter(filename):
+        return filename.endswith(ext)
+    
+    return _unzip_base(path_zip, path_unzip, file_filter=file_filter)
