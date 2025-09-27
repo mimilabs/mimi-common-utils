@@ -37,8 +37,11 @@ import numpy as np
 #def cosine_sim(a, b):
 #    return 1 - cosine(a, b)
 
-def get_word_similarity_metrics(word_a, word_b):
+def get_word_similarity_metrics(word_a, word_b, ignore_lst=False):
     """Check if two words are similar based on edit distance and soundex."""
+    for ignore_keyword in ignore_lst:
+        word_a = word_a.replace(ignore_keyword, '')
+        word_b = word_b.replace(ignore_keyword, '')
     return {
         'distance': dld(word_a, word_b),
         'same_soundex': sdx(word_a) == sdx(word_b)
@@ -50,7 +53,7 @@ def should_map_words(metrics, score_a, score_b, min_dist):
             score_a > score_b and 
             metrics['same_soundex'])
 
-def create_typo_mapping(word_cnt, min_dist=3):
+def create_typo_mapping(word_cnt, min_dist=3, ignore_lst=[]):
     """Create mapping for similar words likely to be typos.
     
     Args:
@@ -70,7 +73,8 @@ def create_typo_mapping(word_cnt, min_dist=3):
             
             score_a = word_cnt[word_a]
             score_b = word_cnt[word_b]
-            metrics = get_word_similarity_metrics(word_a, word_b)
+            metrics = get_word_similarity_metrics(word_a, word_b, 
+                                                  ignore_lst=ignore_lst)
             
             if should_map_words(metrics, score_a, score_b, min_dist):
                 # Only update if new mapping has higher frequency

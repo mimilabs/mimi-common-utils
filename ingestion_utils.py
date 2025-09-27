@@ -63,4 +63,8 @@ def change_header(header_org):
 
 # COMMAND ----------
 
-
+def standardize_entity(name):
+    name = re.sub(r'\([^)]*\)', '', str(name))  # Remove parentheses content
+    name = re.sub(r'[^a-zA-Z0-9\s]', '', name)  # Remove special characters
+    name = re.sub(r'\b(Inc|LLC|Corp|Ltd|Co|Corporation|Incorporated|Limited|Company|LP|LLP)\b', '', name, flags=re.IGNORECASE)  # Remove suffixes
+    return re.sub(r'\s+', ' ', name).strip() 

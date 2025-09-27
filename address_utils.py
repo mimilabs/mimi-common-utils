@@ -201,7 +201,7 @@ def get_h3(lat, lng, res):
     if lat is None or lng is None:
         return ""
     else:
-        return h3.geo_to_h3(lat, lng, res)
+        return h3.latlng_to_cell(lat, lng, res)
 
 # COMMAND ----------
 
