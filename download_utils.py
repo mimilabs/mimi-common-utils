@@ -10,6 +10,38 @@ import zipfile
 
 # COMMAND ----------
 
+# NOTE: this configuration worked for downloading VA PBM data
+def download_file_like_browser_using_session(url, path, filename, chunk_size=8192):
+    # NOTE the stream=True parameter below
+    session = requests.Session()
+    if not Path(f"{path}/{filename}").exists():
+        print(f"[INFO] {filename} downloading to {path}/{filename}")
+
+        headers = {
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/119.0.0.0 Safari/537.36',
+            'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8',
+            'Accept-Language': 'en-US,en;q=0.9',
+            'Accept-Encoding': 'gzip, deflate, br',
+            'DNT': '1',
+            'Connection': 'keep-alive',
+            'Upgrade-Insecure-Requests': '1',
+            'Sec-Fetch-Dest': 'document',
+            'Sec-Fetch-Mode': 'navigate',
+            'Sec-Fetch-Site': 'none',
+            'Sec-Fetch-User': '?1',
+            'Cache-Control': 'max-age=0',
+        }
+        with session.get(url, headers=headers, verify=False, timeout=30) as r:
+            r.raise_for_status()
+            with open(f"{path}/{filename}", 'wb') as f:
+                for chunk in tqdm(r.iter_content(chunk_size=chunk_size)): 
+                    # If you have chunk encoded response uncomment if
+                    # and set chunk_size parameter to None.
+                    #if chunk: 
+                    f.write(chunk)
+
+# COMMAND ----------
+
 def _download_like_browser(url, path, filename, chunk_size=8192):
     # NOTE the stream=True parameter below
     headers = {
@@ -37,9 +69,9 @@ def download_file_like_browser(url, path, filename, chunk_size=8192):
         print(f"[INFO] {filename} downloading to {path}/{filename}")
         _download_like_browser(url, path, filename, chunk_size)
 
-def _download(url, path, filename, chunk_size=8192):
+def _download(url, path, filename, chunk_size=8192, verify_ssl=True):
     # NOTE the stream=True parameter below
-    with requests.get(f"{url}", stream=True) as r:
+    with requests.get(f"{url}", stream=True, verify=verify_ssl) as r:
         r.raise_for_status()
         with open(f"{path}/{filename}", 'wb') as f:
             for chunk in tqdm(r.iter_content(chunk_size=chunk_size)): 
@@ -48,13 +80,13 @@ def _download(url, path, filename, chunk_size=8192):
                 #if chunk: 
                 f.write(chunk)
 
-def download_file(url, path, filename, chunk_size=8192):
+def download_file(url, path, filename, chunk_size=8192, verify_ssl=True):
     # NOTE the stream=True parameter below
     if not Path(f"{path}/{filename}").exists():
         print(f"[INFO] {filename} downloading to {path}/{filename}")
-        _download(url, path, filename, chunk_size)
+        _download(url, path, filename, chunk_size, verify_ssl)
 
-def download_files(urls, path, filenames = None, chunk_size=8192):
+def download_files(urls, path, filenames = None, chunk_size=8192, verify_ssl=True):
     for i, url in enumerate(urls):
         filename = url.split("/")[-1]
         if filenames is not None:
@@ -65,7 +97,7 @@ def download_files(urls, path, filenames = None, chunk_size=8192):
             continue
         else:
             print(f"[INFO] {filename} downloading to {path}/{filename}")
-            _download(url, path, filename, chunk_size)
+            _download(url, path, filename, chunk_size, verify_ssl)
 
 # COMMAND ----------
 
