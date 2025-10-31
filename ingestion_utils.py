@@ -68,3 +68,19 @@ def standardize_entity(name):
     name = re.sub(r'[^a-zA-Z0-9\s]', '', name)  # Remove special characters
     name = re.sub(r'\b(Inc|LLC|Corp|Ltd|Co|Corporation|Incorporated|Limited|Company|LP|LLP)\b', '', name, flags=re.IGNORECASE)  # Remove suffixes
     return re.sub(r'\s+', ' ', name).strip() 
+
+# COMMAND ----------
+
+def compare_columns(df1, df2):
+    dtypes1 = {col: dtype for col, dtype in df1.dtypes}
+    dtypes2 = {col: dtype for col, dtype in df2.dtypes}
+    print("df1 size: ", len(dtypes1))
+    print("df2 size: ", len(dtypes2))
+    for col in df1.columns:
+        if col not in df2.columns:
+            print(f"Column '{col}' is missing in df2.")
+        elif dtypes1[col] != dtypes2[col]:
+            print(f"Column '{col}' has different data types in df1 and df2.")
+    for col in df2.columns:
+        if col not in df1.columns:
+            print(f"Column '{col}' is missing in df1.")
