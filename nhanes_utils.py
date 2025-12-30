@@ -15,7 +15,6 @@ dlt_path_metadata = 'mimi_ws_1.cdc.nhanes_metadata'
 volume_path = f'/Volumes/mimi_ws_1/cdc/src/nhanes/'
 volume_path2 = f'/Volumes/mimi_ws_1/cdc/src/nhanes_vynguyen/' #https://www.ncbi.nlm.nih.gov/pmc/articles/PMC9934713/#SD2
 
-
 # COMMAND ----------
 
 sheet_names = ['Table S1-Mortality',
@@ -37,12 +36,18 @@ with pd.ExcelFile(f'{volume_path2}media-2.xlsx') as file:
         pdf = pdf.loc[pdf['variable_codename_use']!=pdf['variable_codename'],:]
         for _, row in pdf.iterrows():
             src = row['file_name']
-            var_old = row['variable_codename'].lower()
-            var_new = row['variable_codename_use'].lower()
+            var_old = row['variable_codename'].lower().strip()
+            var_new = row['variable_codename_use'].lower().strip()
+            if var_old == var_new:
+                continue
+            if var_old == 'mcq500' and src == 'MCQ_J':
+                # this is a bug from the manual harmonization file
+                continue
             manual_harmonizations[src][var_old] = var_new 
 
 # COMMAND ----------
 
+# to make the file description a bit simpler for the table name representation
 file_desc_mapping = {
     "Blood Pressure - Oscillometric Measurement": "Blood Pressure",
     "Cholesterol - High - Density Lipoprotein (HDL)": "Cholesterol - HDL",
@@ -62,41 +67,6 @@ file_desc_mapping = {
 
 # COMMAND ----------
 
-focus_files = ['Acculturation',
- 'Air Quality',
- 'Albumin & Creatinine - Urine',
- 'Alcohol Use',
- 'Alpha-1-Acid Glycoprotein - Serum (Surplus)',
- 'Blood Pressure',
- 'Blood Pressure & Cholesterol',
- 'Body Measures',
- 'Bowel Health',
- 'Cardiovascular Health',
- 'Cholesterol - HDL',
- 'Cholesterol - LDL & Triglycerides',
- 'Cholesterol - Total',
- 'Demographic Variables & Sample Weights',
- 'Diabetes',
- 'Fasting Questionnaire',
- 'Glycohemoglobin',
- 'Glyphosate (GLYP) - Urine',
- 'High-Sensitivity C-Reactive Protein',
- 'Hospital Utilization & Access to Care',
- 'Income',
- 'Insulin',
- 'Kidney Conditions',
- 'Medical Conditions',
- 'Oral Glucose Tolerance Test',
- 'Plasma Fasting Glucose',
- 'Preventive Aspirin Use',
- 'Smoking - Adult Recent Tobacco Use & Youth Cigarette/Tobacco Use',
- 'Smoking - Cigarette Use',
- 'Smoking - Household Smokers',
- 'Smoking - Recent Tobacco Use',
- 'Standard Biochemistry Profile']
-
-# COMMAND ----------
-
 metadata = spark.read.table(dlt_path_metadata).toPandas()
 metadata['data_file_desc'] = (metadata['data_file_desc']
                                   .apply(lambda x: file_desc_mapping.get(x,x)))
@@ -104,92 +74,33 @@ metadata['var_name'] = (metadata['var_name'].apply(lambda x: x.lower()))
 
 # COMMAND ----------
 
-def prep(target_desc):
+comp2abbr = {'Demographics': 'demo', 
+                'Dietary': 'diet', 
+                'Examination': 'exam', 
+                'Laboratory': 'lab', 
+                'Questionnaire': 'qre'}
+
+# COMMAND ----------
+
+def prep(target_desc, component):
 
     files = {}
-    src2var = defaultdict(list) # source => varname
-    var2desc2src = {} # varname => desc => source (list)
-
-    def get_common_key(var1, var2):
-        if var1 == var2:
-            return var1
-        elif var1[:-1] == var2[:-1]:
-            return var1[:-1] + "_"
-        elif var1[:-1] == var2:
-            return var1[:-1] + "_"
-        elif var1 == var2[:-1]:
-            return var2[:-1] + "_"
-        else:
-            return None
-    
-    component = ''
-    for _, row in (metadata.loc[metadata['data_file_desc']==target_desc, :].iterrows()):
-        src = row["data_file_name"]
-        desc = row["var_desc"]
-        var = row["var_name"]
-        component = row["component"]
-        mimi_src_file_date = parse(f'{row["end_year"]}-12-31').date()    
-        filepath = Path(f'{volume_path}/{src}.XPT')
-        if filepath.exists():
-            files[filepath] = mimi_src_file_date
-            src2var[src].append(var)
-            if var not in var2desc2src:
-                var2desc2src[var] = defaultdict(list)
-            var2desc2src[var][desc].append(src)
-
-    blacklist = []
-    for src, var_lst in src2var.items():
-        for var1, var2 in combinations(var_lst, 2):
-            common_key = get_common_key(var1, var2)
-            if common_key is not None:
-                blacklist.append(common_key)
-    blacklist = set(blacklist)
-
     var2desc = {}
-    for var, desc2src in var2desc2src.items():
-        desc_lst = [(desc + ' (from ' + ', '.join(src_lst) + ')') 
-                            for desc, src_lst in desc2src.items()]
-        var2desc[var] = desc_lst
-    file_lst = sorted([(k,v) for k, v in files.items()], key=lambda x: x[1], reverse=True)
-    var_lst = [k for k in var2desc.keys()]
+    
+    for _, row in (metadata.loc[((metadata['data_file_desc']==target_desc) &
+                                 (metadata['component']==component)), :]
+                   .sort_values('end_year')
+                   .iterrows()):
+        src = row["data_file_name"]
+        desc = row["var_desc"].strip()
+        var = row["var_name"].lower().strip()
+        var2desc[var] = desc
+        mimi_src_file_date = parse(f'{row["end_year"]}-12-31').date()    
+        matches = list(Path(volume_path).glob(f'{src}.[Xx][Pp][Tt]'))
+        if matches:
+            files[matches[0]] = mimi_src_file_date
 
-    var2var = {}
-    for var1, var2 in combinations(var_lst, 2):
-        common_key = get_common_key(var1, var2)
-        if common_key is None:
-            continue
-        elif common_key in blacklist:
-            continue
-        
-        var2var[var1] = common_key
-        var2var[var2] = common_key
-        if common_key not in var2desc:
-            var2desc[common_key] = []
-        var2desc[common_key] += var2desc[var1]
-        var2desc[common_key] += var2desc[var2]
-
-    # augment with the manual harmonizations
-    for src, var_lst in src2var.items():
-        for varold, varnew in manual_harmonizations.get(src, {}).items():
-            if varold == 'mcq500':
-                # I think this is a bug... so we skip.
-                continue
-            if varold not in var2var:
-                var2var[varold] = varnew
-                if varnew not in var2desc:
-                    var2desc[varnew] = []
-                if varold in var2desc:
-                    var2desc[varnew] += var2desc[varold]
-
-    var2desc = {k: ', '.join(list(set(v))) for k, v in var2desc.items()}
-
-    comp2abbr = {'Demographics': 'demo', 
-                 'Dietary': 'diet', 
-                 'Examination': 'exam', 
-                 'Laboratory': 'lab', 
-                 'Questionnaire': 'qre'}
-
-    return file_lst, var2var, var2desc, comp2abbr[component]
+    return files, var2desc
 
 # COMMAND ----------
 
